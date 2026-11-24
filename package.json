@@ -1,0 +1,14 @@
+{
+  "name": "teacher-floating-app",
+  "version": "1.0.0",
+  "description": "教师个人离线桌面浮窗：课表倒计时、打卡提醒、下班进度、周课表概览",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test"
+  },
+  "private": true,
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}

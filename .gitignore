@@ -1,0 +1,16 @@
+# 依赖目录（由 package-lock.json 还原，不纳入版本管理）
+node_modules/
+
+# 运行与调试日志
+*.log
+
+# 本地数据与临时文件
+data.json
+*.tmp
+debug_*
+smoke-*
+final-*
+
+# 操作系统垃圾文件
+Thumbs.db
+.DS_Store

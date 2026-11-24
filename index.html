@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: file:;">
+  <title>教师桌面浮窗</title>
+  <style>
+    /* ============ 基础与主题变量（阶段 6 扩展多套预设） ============ */
+    :root {
+      --panel-bg: linear-gradient(160deg, #3b3f7a 0%, #2b2e5e 55%, #23264d 100%);
+      --card-bg: rgba(255, 255, 255, 0.12);
+      --card-border: rgba(255, 255, 255, 0.18);
+      --text-main: #ffffff;
+      --text-sub: rgba(255, 255, 255, 0.72);
+      --accent: #f5b942;
+      --danger: #ff7a7a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+      color: var(--text-main);
+      overflow: hidden;
+    }
+
+    .panel {
+      width: 100%;
+      height: 100%;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: var(--panel-bg);
+      border-radius: 18px;
+    }
+
+    /* ============ 顶部标题栏 ============ */
+    .titlebar { display: flex; flex-direction: column; gap: 6px; -webkit-app-region: drag; }
+    .clock-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    #clock { font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+
+    .titlebar-actions { display: flex; align-items: center; gap: 6px; -webkit-app-region: no-drag; }
+    .ctl-btn {
+      border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-main);
+      border-radius: 8px; padding: 5px 10px; font-size: 12px; cursor: pointer;
+    }
+    .ctl-btn:hover { background: rgba(255, 255, 255, 0.22); }
+
+    .meta-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-sub); }
+    #scheduleLabel { color: var(--accent); font-weight: 600; }
+    #scheduleBtn {
+      -webkit-app-region: no-drag; border: 1px solid var(--card-border); background: var(--card-bg);
+      color: var(--text-main); border-radius: 8px; padding: 3px 8px; font-size: 12px; cursor: pointer;
+    }
+
+    #themeDots { display: flex; gap: 5px; -webkit-app-region: no-drag; }
+    .theme-dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.5); cursor: pointer; padding: 0; }
+    .theme-dot.active { outline: 2px solid var(--accent); }
+
+    /* ============ 卡片区 ============ */
+    .cards { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overflow-x: hidden; }
+    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 12px; }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .card-title { font-size: 13px; font-weight: 600; color: var(--text-sub); }
+    .card-body { margin-top: 6px; font-size: 14px; }
+    .sub { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
+    .countdown { font-size: 18px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+    .status-tag { font-size: 14px; font-weight: 700; }
+
+    /* 打卡 */
+    .checkin-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
+    .checkin-item {
+      border: 1px solid var(--card-border); border-radius: 10px; padding: 8px;
+      display: flex; flex-direction: column; gap: 2px; background: rgba(255,255,255,0.05);
+    }
+    .checkin-item.active { border-color: var(--accent); background: rgba(245, 185, 66, 0.18); }
+    .checkin-label { font-size: 12px; color: var(--text-sub); }
+    .checkin-time { font-size: 14px; font-weight: 600; }
+    .checkin-item.active .checkin-label { color: var(--accent); }
+
+    /* 进度条 */
+    .progress-bar { height: 10px; border-radius: 6px; background: rgba(255,255,255,0.15); margin: 8px 0; overflow: hidden; }
+    .progress-fill { height: 100%; width: 0; border-radius: 6px; background: var(--accent); transition: width 0.5s; }
+
+    /* 课程列表 */
+    .lesson-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .lesson-item {
+      display: grid; grid-template-columns: 52px 1fr auto; gap: 6px; align-items: center;
+      border-radius: 10px; padding: 7px 8px; background: rgba(255,255,255,0.06); font-size: 13px;
+    }
+    .lesson-item .l-time { grid-column: 2 / 4; font-size: 11px; color: var(--text-sub); }
+    .lesson-item.current { border: 1px solid var(--accent); background: rgba(245, 185, 66, 0.16); }
+    .lesson-item.done { opacity: 0.42; }
+    .l-period { color: var(--text-sub); font-size: 12px; }
+    .l-class { font-size: 11px; color: var(--text-sub); }
+
+    /* 本周概览 */
+    #weekGrid { display: grid; grid-template-columns: 40px repeat(7, 1fr); gap: 3px; margin-top: 8px; font-size: 10px; }
+    .week-cell { border-radius: 6px; padding: 4px 2px; text-align: center; background: rgba(255,255,255,0.06); }
+    .week-cell.head { color: var(--text-sub); background: transparent; }
+    .week-cell.today-col { outline: 1px solid var(--accent); }
+    .week-cell.current-row { background: rgba(245, 185, 66, 0.2); }
+    .week-cell .w-subject { display: block; font-weight: 600; }
+    .week-cell .w-class { display: block; font-size: 9px; color: var(--text-sub); }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--text-sub); }
+    .legend-item { display: flex; align-items: center; gap: 4px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+    /* ============ 设置面板 M9 ============ */
+    .panel { position: relative; }
+    .settings-overlay {
+      position: absolute; inset: 0; border-radius: 18px; z-index: 10;
+      background: rgba(28, 30, 56, 0.98);
+      display: flex; flex-direction: column; padding: 12px; gap: 10px;
+    }
+    .settings-overlay.hidden { display: none; }
+    .settings-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; }
+    .settings-body { flex: 1; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 12px; }
+    .settings-body section { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px; }
+    .settings-body h3 { font-size: 13px; margin-bottom: 8px; color: var(--accent); }
+    .form-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
+    .form-row label { font-size: 12px; color: var(--text-sub); width: 76px; }
+    .settings-body input, .settings-body select {
+      background: rgba(255,255,255,0.1); border: 1px solid var(--card-border);
+      color: var(--text-main); border-radius: 8px; padding: 5px 8px; font-size: 12px;
+    }
+    .lesson-edit { display: grid; grid-template-columns: 44px 1fr 1fr 1fr 80px 76px 76px 34px; gap: 6px; margin: 6px 0; align-items: center; }
+    .lesson-edit input, .lesson-edit select { width: 100%; }
+    .settings-foot { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+    .msg { font-size: 12px; margin-right: auto; }
+    .msg.ok { color: #9dffb0; }
+    .msg.err { color: var(--danger); }
+    .btn-primary { background: var(--accent); color: #23264d; border: none; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <!-- 顶部栏 M1 -->
+    <header class="titlebar">
+      <div class="clock-row">
+        <span id="clock">--:--:--</span>
+        <div class="titlebar-actions">
+          <div id="themeDots"></div>
+          <button id="settingsBtn" class="ctl-btn">设置</button>
+          <button id="pinBtn" class="ctl-btn">置顶</button>
+          <button id="quitBtn" class="ctl-btn">退出</button>
+        </div>
+      </div>
+      <div class="meta-row">
+        <span id="dateLine">----年--月--日 星期-</span>
+        <span id="scheduleLabel"></span>
+        <button id="scheduleBtn"></button>
+      </div>
+    </header>
+
+    <!-- 主体卡片区 -->
+    <main class="cards" id="cards">
+      <!-- M2 当前状态卡 -->
+      <section class="card">
+        <div class="card-head">
+          <span id="statusLabel" class="status-tag">--</span>
+          <span id="statusCountdown" class="countdown">--:--</span>
+        </div>
+        <div class="card-body">
+          <div id="statusDetail">--</div>
+          <div id="statusNext" class="sub">--</div>
+        </div>
+      </section>
+
+      <!-- M3 下一节课 -->
+      <section class="card">
+        <div class="card-head">
+          <span class="card-title">下一节</span>
+          <span id="nextCountdown" class="countdown"></span>
+        </div>
+        <div id="nextDetail" class="card-body">--</div>
+      </section>
+
+      <!-- M4 打卡提醒 -->
+      <section class="card">
+        <div class="card-title">打卡提醒</div>
+        <div class="checkin-grid" id="checkinList"></div>
+      </section>
+
+      <!-- M5 下班进度 -->
+      <section class="card">
+        <div class="card-head">
+          <span class="card-title">下班进度</span>
+          <span id="progressPercent" class="countdown">0%</span>
+        </div>
+        <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+        <div class="card-head sub">
+          <span id="offWorkTime">--</span>
+          <span id="progressRemain">剩余 --</span>
+        </div>
+      </section>
+
+      <!-- M6 今日课程 -->
+      <section class="card">
+        <div class="card-title">今日课程</div>
+        <div id="todayList" class="lesson-list"></div>
+      </section>
+
+      <!-- M7 本周课表概览 -->
+      <section class="card">
+        <div class="card-title">本周课表</div>
+        <div id="weekGrid"></div>
+        <div id="weekLegend" class="legend"></div>
+      </section>
+    </main>
+
+    <!-- 设置面板 M9 -->
+    <div id="settingsOverlay" class="settings-overlay hidden">
+      <div class="settings-head">
+        <span>设置</span>
+        <button id="settingsClose" class="ctl-btn">关闭</button>
+      </div>
+      <div class="settings-body">
+        <section>
+          <h3>偏好</h3>
+          <div class="form-row">
+            <label>作息</label>
+            <select id="prefSchedule">
+              <option value="summer">夏季</option>
+              <option value="winter">冬季</option>
+            </select>
+            <label>主题</label>
+            <select id="prefTheme">
+              <option value="purple-blue">紫蓝</option>
+              <option value="ocean">海蓝</option>
+              <option value="forest">墨绿</option>
+              <option value="rose">玫粉</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>背景图路径</label>
+            <input id="prefBg" type="text" placeholder="留空使用渐变背景">
+          </div>
+        </section>
+
+        <section>
+          <h3>时间安排（<span id="timeSettingLabel"></span>）</h3>
+          <div id="periodsWrap"></div>
+          <div class="form-row"><label>早入校</label><input type="time" id="ciMorningEntry"></div>
+          <div class="form-row"><label>上午放学</label><input type="time" id="ciMorningLeave"></div>
+          <div class="form-row"><label>下午入校</label><input type="time" id="ciAfternoonEntry"></div>
+          <div class="form-row"><label>下午放学</label><input type="time" id="ciAfternoonLeave"></div>
+          <div class="form-row">
+            <label>上班</label><input type="time" id="workStart">
+            <label>下班</label><input type="time" id="workEnd">
+          </div>
+          <div id="blocksWrap"></div>
+        </section>
+
+        <section>
+          <h3>周课表</h3>
+          <div class="form-row">
+            <label>星期</label>
+            <select id="timetableDay">
+              <option value="1">周一</option>
+              <option value="2">周二</option>
+              <option value="3">周三</option>
+              <option value="4">周四</option>
+              <option value="5">周五</option>
+              <option value="6">周六</option>
+              <option value="7">周日</option>
+            </select>
+            <button id="addLesson" class="ctl-btn">添加课程</button>
+          </div>
+          <div id="timetableList"></div>
+        </section>
+
+        <section>
+          <h3>备份</h3>
+          <div class="form-row">
+            <button id="exportBtn" class="ctl-btn">导出备份</button>
+            <button id="importBtn" class="ctl-btn">从备份导入</button>
+          </div>
+        </section>
+      </div>
+      <div class="settings-foot">
+        <span id="settingsMsg" class="msg"></span>
+        <button id="saveSettings" class="ctl-btn btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/time-engine.js"></script>
+  <script src="src/themes.js"></script>
+  <script>
+    // ============ 渲染层错误上报 ============
+    window.addEventListener('error', (e) => {
+      if (window.appAPI) window.appAPI.reportError(String(e.message));
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      if (window.appAPI) window.appAPI.reportError('Promise 未处理：' + String(e.reason));
+    });
+
+    // ============ 全局状态 ============
+    const state = { data: null };
+    const TE = window.TimeEngine;
+    const Themes = window.Themes;
+
+    const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+    const WEEK_KEYS = ['1', '2', '3', '4', '5', '6', '7'];
+    const CLASS_PALETTE = ['#f5b942', '#7ad0ff', '#9dffb0', '#ff9ec6', '#c9a7ff', '#ffd28a'];
+
+    const clockEl = document.getElementById('clock');
+    const dateEl = document.getElementById('dateLine');
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function todayKey(now) {
+      const d = now.getDay();
+      return d === 0 ? '7' : String(d);
+    }
+
+    function classColor(className) {
+      let hash = 0;
+      for (const ch of String(className)) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+      return CLASS_PALETTE[hash % CLASS_PALETTE.length];
+    }
+
+    // 教室简称：周格/卡片空间有限，长实训室名简化显示
+    function shortRoom(room) {
+      if (!room) return '';
+      if (room.includes('北')) return '北实训室';
+      if (room.includes('南')) return '南实训室';
+      return room;
+    }
+
+    // 节次标签：优先用时段表的 label（早1/晚1 等），回退编号
+    function periodLabel(setting, period) {
+      const p = (setting && setting.periods || []).find((x) => x.period === period);
+      return p && p.label ? p.label : String(period);
+    }
+
+    // 距某个 "HH:mm" 结束/开始的秒数
+    function secTo(now, hhmm) {
+      const target = TE.toMinutes(hhmm) * 60;
+      const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+      return Math.max(0, target - nowSec);
+    }
+
+    function currentSetting(data) {
+      return data.timeSettings[data.preferences.scheduleType] || data.timeSettings.summer;
+    }
+
+    // ============ 时钟 ============
+    function renderClock(now) {
+      const pad = (n) => String(n).padStart(2, '0');
+      clockEl.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      dateEl.textContent = `${now.getFullYear()}年${pad(now.getMonth() + 1)}月${pad(now.getDate())}日 星期${WEEK[now.getDay()]}`;
+    }
+
+    // ============ M2 当前状态 ============
+    function renderStatus(now, setting, lessons, status, next) {
+      const labelEl = document.getElementById('statusLabel');
+      const countdownEl = document.getElementById('statusCountdown');
+      const detailEl = document.getElementById('statusDetail');
+      const nextEl = document.getElementById('statusNext');
+
+      labelEl.textContent = status.label;
+      if (status.lesson) {
+        const room = status.lesson.room ? ` · ${shortRoom(status.lesson.room)}` : '';
+        detailEl.textContent = `${periodLabel(setting, status.lesson.period)} · ${status.lesson.subject} · ${status.lesson.className}${room}`;
+        countdownEl.textContent = TE.formatDuration(secTo(now, status.lesson.end));
+      } else if (status.block) {
+        detailEl.textContent = status.block.name;
+        countdownEl.textContent = TE.formatDuration(secTo(now, status.block.end));
+      } else {
+        detailEl.textContent = '当前没有安排课程或时段';
+        countdownEl.textContent = '--:--';
+      }
+      nextEl.textContent = next
+        ? `下一节：${periodLabel(setting, next.period)} ${next.subject} ${next.className}（${next.start}–${next.end}）`
+        : '今日已无课程';
+    }
+
+    // ============ M3 下一节 ============
+    function renderNext(now, setting, next) {
+      const detailEl = document.getElementById('nextDetail');
+      const countdownEl = document.getElementById('nextCountdown');
+      if (!next) {
+        detailEl.textContent = '今日已无课程';
+        countdownEl.textContent = '';
+        return;
+      }
+      const room = next.room ? ` · ${shortRoom(next.room)}` : '';
+      detailEl.textContent = `${periodLabel(setting, next.period)} · ${next.subject} · ${next.className}${room}（${next.start}–${next.end}）`;
+      countdownEl.textContent = TE.formatDuration(secTo(now, next.start));
+    }
+
+    // ============ M4 打卡 ============
+    const CHECKINS = [
+      { key: 'morningEntry', label: '早入校' },
+      { key: 'morningLeave', label: '上午放学' },
+      { key: 'afternoonEntry', label: '下午入校' },
+      { key: 'afternoonLeave', label: '下午放学' }
+    ];
+    function renderCheckin(nowMin, setting) {
+      const listEl = document.getElementById('checkinList');
+      listEl.innerHTML = CHECKINS.map((c) => {
+        const time = setting.checkins[c.key];
+        const active = nowMin >= TE.toMinutes(time);
+        return `<div class="checkin-item${active ? ' active' : ''}">
+          <span class="checkin-label">${esc(c.label)}</span>
+          <span class="checkin-time">${esc(time)}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // ============ M5 下班进度 ============
+    function renderProgress(nowMin, setting) {
+      const prog = TE.workdayProgress(nowMin, setting.workday);
+      document.getElementById('progressPercent').textContent = `${prog.percent}%`;
+      document.getElementById('progressFill').style.width = `${prog.percent}%`;
+      document.getElementById('offWorkTime').textContent = `下班 ${setting.workday.end}`;
+      document.getElementById('progressRemain').textContent = `剩余 ${TE.formatDuration(prog.remainingMinutes * 60)}`;
+    }
+
+    // ============ M6 今日课程 ============
+    function renderToday(nowMin, setting, lessons) {
+      const listEl = document.getElementById('todayList');
+      if (lessons.length === 0) {
+        listEl.innerHTML = '<div class="sub">今天没有课程安排</div>';
+        return;
+      }
+      listEl.innerHTML = lessons.map((l) => {
+        const cls = TE.classifyLesson(nowMin, l);
+        const typeTag = (l.type === '晚自习' || l.type === '早自习') ? ` · ${l.type}` : '';
+        const room = l.room ? ` · ${esc(shortRoom(l.room))}` : '';
+        return `<div class="lesson-item ${cls}">
+          <span class="l-period">${esc(periodLabel(setting, l.period))}</span>
+          <span>${esc(l.subject)}${typeTag}</span>
+          <span class="l-class">${esc(l.className)}</span>
+          <span class="l-time">${esc(l.start)}–${esc(l.end)}${room}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // ============ M7 本周概览 ============
+    function renderWeek(now, setting, timetable, currentPeriod) {
+      const grid = document.getElementById('weekGrid');
+      const today = todayKey(now);
+      const periods = setting.periods;
+
+      const byDay = {};
+      WEEK_KEYS.forEach((d) => {
+        byDay[d] = {};
+        (timetable[d] || []).forEach((l) => { byDay[d][l.period] = l; });
+      });
+
+      let html = '<div class="week-cell head">节次</div>';
+      WEEK_KEYS.forEach((d) => {
+        html += `<div class="week-cell head${d === today ? ' today-col' : ''}">${WEEK[Number(d) === 7 ? 0 : Number(d)]}</div>`;
+      });
+
+      periods.forEach((p) => {
+        const rowCls = p.period === currentPeriod ? ' current-row' : '';
+        html += `<div class="week-cell head${rowCls}">${esc(p.label || p.period)}</div>`;
+        WEEK_KEYS.forEach((d) => {
+          const lesson = byDay[d][p.period];
+          const colCls = d === today ? ' today-col' : '';
+          if (lesson) {
+            const room = lesson.room ? ` · ${esc(shortRoom(lesson.room))}` : '';
+            html += `<div class="week-cell${colCls}${rowCls}">
+              <span class="w-subject">${esc(lesson.subject)}</span>
+              <span class="w-class">${esc(lesson.className)}${room}</span>
+            </div>`;
+          } else {
+            html += `<div class="week-cell${colCls}${rowCls}"></div>`;
+          }
+        });
+      });
+      grid.innerHTML = html;
+
+      // 图例：本周出现的班级
+      const classes = [...new Set(WEEK_KEYS.flatMap((d) => (timetable[d] || []).map((l) => l.className)))];
+      document.getElementById('weekLegend').innerHTML = classes.map((c) =>
+        `<span class="legend-item"><span class="legend-dot" style="background:${classColor(c)}"></span>${esc(c)}</span>`
+      ).join('');
+    }
+
+    // ============ 总渲染 ============
+    function render() {
+      const now = new Date();
+      renderClock(now);
+      if (!state.data) return;
+
+      const setting = currentSetting(state.data);
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const lessons = TE.sortLessons(state.data.timetable[todayKey(now)] || []);
+      const status = TE.getStatus(nowMin, lessons, setting.blocks);
+      const next = TE.getNextLesson(nowMin, lessons);
+
+      renderStatus(now, setting, lessons, status, next);
+      renderNext(now, setting, next);
+      renderCheckin(nowMin, setting);
+      renderProgress(nowMin, setting);
+      renderToday(nowMin, setting, lessons);
+      renderWeek(now, setting, state.data.timetable, status.lesson ? status.lesson.period : null);
+    }
+
+    // ============ 主题外观 M8 ============
+    function applyTheme() {
+      if (!state.data) return;
+      const pref = state.data.preferences;
+      const theme = Themes.resolveTheme(pref.theme);
+      const root = document.documentElement;
+      Themes.VAR_KEYS.forEach((k) => root.style.setProperty(k, theme.vars[k]));
+      const panel = document.querySelector('.panel');
+      if (pref.backgroundImage) {
+        panel.style.backgroundImage = `url("${pref.backgroundImage}")`;
+        panel.style.backgroundSize = 'cover';
+        panel.style.backgroundPosition = 'center';
+      } else {
+        panel.style.backgroundImage = theme.vars['--panel-bg'];
+        panel.style.backgroundSize = '';
+        panel.style.backgroundPosition = '';
+      }
+    }
+
+    function renderThemeDots() {
+      const wrap = document.getElementById('themeDots');
+      wrap.innerHTML = Themes.themeKeys().map((k) => {
+        const t = Themes.THEMES[k];
+        const active = state.data.preferences.theme === k;
+        return `<button class="theme-dot${active ? ' active' : ''}" data-theme="${k}" title="${esc(t.label)}" style="background:${t.vars['--accent']}"></button>`;
+      }).join('');
+    }
+
+    document.getElementById('themeDots').addEventListener('click', async (e) => {
+      const key = e.target.dataset.theme;
+      if (!key || !state.data) return;
+      state.data.preferences.theme = key;
+      const res = await window.appAPI.saveData(state.data);
+      if (res.ok) { state.data = res.data; applyTheme(); renderThemeDots(); }
+    });
+
+    // ============ 顶部栏：作息切换 ============
+    const scheduleLabel = document.getElementById('scheduleLabel');
+    const scheduleBtn = document.getElementById('scheduleBtn');
+
+    function renderTopbar() {
+      if (!state.data) return;
+      const isSummer = state.data.preferences.scheduleType === 'summer';
+      scheduleLabel.textContent = isSummer ? '夏季作息' : '冬季作息';
+      scheduleBtn.textContent = isSummer ? '切到冬季' : '切到夏季';
+    }
+
+    scheduleBtn.addEventListener('click', async () => {
+      if (!state.data) return;
+      const nextType = state.data.preferences.scheduleType === 'summer' ? 'winter' : 'summer';
+      state.data.preferences.scheduleType = nextType;
+      const res = await window.appAPI.saveData(state.data);
+      if (res.ok) { state.data = res.data; renderTopbar(); render(); }
+    });
+
+    // ============ 窗口控制 ============
+    const pinBtn = document.getElementById('pinBtn');
+    const quitBtn = document.getElementById('quitBtn');
+    pinBtn.addEventListener('click', () => window.appAPI.togglePin());
+    window.appAPI.onPinnedChanged((pinned) => { pinBtn.textContent = pinned ? '置顶中' : '置顶'; });
+    quitBtn.addEventListener('click', () => window.appAPI.quit());
+
+    // ============ 设置面板 M9 ============
+    const overlay = document.getElementById('settingsOverlay');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsClose = document.getElementById('settingsClose');
+    const draft = { data: null };
+    let editDay = '1';
+
+    function settingDraft() {
+      return draft.data.timeSettings[draft.data.preferences.scheduleType];
+    }
+    function showMsg(text, type) {
+      const msg = document.getElementById('settingsMsg');
+      msg.textContent = text;
+      msg.className = 'msg ' + (type || '');
+    }
+
+    function renderPeriods() {
+      const setting = settingDraft();
+      document.getElementById('timeSettingLabel').textContent =
+        draft.data.preferences.scheduleType === 'summer' ? '夏季' : '冬季';
+      document.getElementById('periodsWrap').innerHTML = setting.periods.map((p, i) => `
+        <div class="form-row">
+          <label>${esc(p.label || `第${p.period}节`)}</label>
+          <input type="time" data-pt="start" data-i="${i}" value="${esc(p.start)}">
+          <input type="time" data-pt="end" data-i="${i}" value="${esc(p.end)}">
+        </div>`).join('');
+      document.getElementById('blocksWrap').innerHTML = setting.blocks.map((b, i) => `
+        <div class="form-row">
+          <label>时段</label>
+          <input type="text" data-bf="name" data-i="${i}" value="${esc(b.name)}">
+          <input type="time" data-bf="start" data-i="${i}" value="${esc(b.start)}">
+          <input type="time" data-bf="end" data-i="${i}" value="${esc(b.end)}">
+        </div>`).join('');
+    }
+
+    function renderCheckinWorkday() {
+      const s = settingDraft();
+      document.getElementById('ciMorningEntry').value = s.checkins.morningEntry;
+      document.getElementById('ciMorningLeave').value = s.checkins.morningLeave;
+      document.getElementById('ciAfternoonEntry').value = s.checkins.afternoonEntry;
+      document.getElementById('ciAfternoonLeave').value = s.checkins.afternoonLeave;
+      document.getElementById('workStart').value = s.workday.start;
+      document.getElementById('workEnd').value = s.workday.end;
+    }
+
+    function renderTimetable() {
+      const lessons = draft.data.timetable[editDay];
+      document.getElementById('timetableList').innerHTML = lessons.map((l, i) => `
+        <div class="lesson-edit">
+          <input type="number" min="1" data-f="period" data-i="${i}" value="${l.period}">
+          <input type="text" data-f="subject" data-i="${i}" value="${esc(l.subject)}">
+          <input type="text" data-f="className" data-i="${i}" value="${esc(l.className)}">
+          <input type="text" data-f="room" data-i="${i}" value="${esc(l.room || '')}" placeholder="教室">
+          <select data-f="type" data-i="${i}">
+            <option value="正课" ${l.type === '正课' ? 'selected' : ''}>正课</option>
+            <option value="晚自习" ${l.type === '晚自习' ? 'selected' : ''}>晚自习</option>
+            <option value="早自习" ${l.type === '早自习' ? 'selected' : ''}>早自习</option>
+          </select>
+          <input type="time" data-f="start" data-i="${i}" value="${esc(l.start)}">
+          <input type="time" data-f="end" data-i="${i}" value="${esc(l.end)}">
+          <button data-del="${i}" class="ctl-btn">删</button>
+        </div>`).join('');
+    }
+
+    function renderSettings() {
+      document.getElementById('prefSchedule').value = draft.data.preferences.scheduleType;
+      document.getElementById('prefTheme').value = draft.data.preferences.theme;
+      document.getElementById('prefBg').value = draft.data.preferences.backgroundImage;
+      document.getElementById('timetableDay').value = editDay;
+      renderPeriods();
+      renderCheckinWorkday();
+      renderTimetable();
+    }
+
+    function openSettings() {
+      draft.data = JSON.parse(JSON.stringify(state.data));
+      editDay = todayKey(new Date());
+      showMsg('', '');
+      renderSettings();
+      overlay.classList.remove('hidden');
+    }
+    function closeSettings() { overlay.classList.add('hidden'); }
+
+    // 偏好
+    document.getElementById('prefSchedule').addEventListener('change', (e) => {
+      draft.data.preferences.scheduleType = e.target.value;
+      renderPeriods(); renderCheckinWorkday();
+    });
+    document.getElementById('prefTheme').addEventListener('change', (e) => {
+      draft.data.preferences.theme = e.target.value;
+    });
+    document.getElementById('prefBg').addEventListener('input', (e) => {
+      draft.data.preferences.backgroundImage = e.target.value;
+    });
+
+    // 节次与备课/午休时段
+    document.getElementById('periodsWrap').addEventListener('input', (e) => {
+      const i = +e.target.dataset.i, pt = e.target.dataset.pt;
+      if (pt) settingDraft().periods[i][pt] = e.target.value;
+    });
+    document.getElementById('blocksWrap').addEventListener('input', (e) => {
+      const i = +e.target.dataset.i, bf = e.target.dataset.bf;
+      settingDraft().blocks[i][bf] = e.target.value;
+    });
+
+    // 打卡与上下班
+    const checkinBindings = [
+      ['ciMorningEntry', 'morningEntry'],
+      ['ciMorningLeave', 'morningLeave'],
+      ['ciAfternoonEntry', 'afternoonEntry'],
+      ['ciAfternoonLeave', 'afternoonLeave']
+    ];
+    checkinBindings.forEach(([id, key]) => {
+      document.getElementById(id).addEventListener('input', (e) => {
+        settingDraft().checkins[key] = e.target.value;
+      });
+    });
+    document.getElementById('workStart').addEventListener('input', (e) => { settingDraft().workday.start = e.target.value; });
+    document.getElementById('workEnd').addEventListener('input', (e) => { settingDraft().workday.end = e.target.value; });
+
+    // 周课表编辑
+    document.getElementById('timetableList').addEventListener('input', (e) => {
+      const i = +e.target.dataset.i, f = e.target.dataset.f;
+      const lesson = draft.data.timetable[editDay][i];
+      if (f === 'period') lesson.period = +e.target.value;
+      else lesson[f] = e.target.value;
+    });
+    document.getElementById('timetableList').addEventListener('click', (e) => {
+      const del = e.target.dataset.del;
+      if (del != null) {
+        draft.data.timetable[editDay].splice(+del, 1);
+        renderTimetable();
+      }
+    });
+    document.getElementById('timetableDay').addEventListener('change', (e) => {
+      editDay = e.target.value;
+      renderTimetable();
+    });
+    document.getElementById('addLesson').addEventListener('click', () => {
+      const periods = settingDraft().periods;
+      const tpl = periods[0] || { period: 1, start: '08:00', end: '08:45' };
+      draft.data.timetable[editDay].push({
+        period: tpl.period != null ? tpl.period : 1,
+        subject: '', className: '', room: '', type: '正课',
+        start: tpl.start, end: tpl.end
+      });
+      renderTimetable();
+      const rows = document.querySelectorAll('#timetableList .lesson-edit');
+      const last = rows[rows.length - 1];
+      if (last) {
+        last.scrollIntoView({ block: 'center' });
+        const subj = last.querySelector('[data-f="subject"]');
+        if (subj) subj.focus();
+      }
+    });
+
+    // 保存与备份
+    document.getElementById('saveSettings').addEventListener('click', async () => {
+      // 剔除完全空白的课程行（科目、班级均未填），避免空行阻断整份保存
+      Object.keys(draft.data.timetable).forEach((d) => {
+        draft.data.timetable[d] = draft.data.timetable[d].filter((l) =>
+          String(l.subject || '').trim() !== '' || String(l.className || '').trim() !== '');
+      });
+      const res = await window.appAPI.saveData(draft.data);
+      if (res.ok) {
+        state.data = res.data;
+        renderTopbar(); render(); applyTheme();
+        showMsg('已保存', 'ok');
+      } else {
+        showMsg((res.errors || []).join('；'), 'err');
+      }
+    });
+    document.getElementById('exportBtn').addEventListener('click', async () => {
+      const res = await window.appAPI.exportBackup();
+      if (res.ok) showMsg('已导出：' + res.filePath, 'ok');
+    });
+    document.getElementById('importBtn').addEventListener('click', async () => {
+      const res = await window.appAPI.importBackup();
+      if (res.ok) {
+        state.data = res.data;
+        draft.data = JSON.parse(JSON.stringify(res.data));
+        editDay = todayKey(new Date());
+        renderTopbar(); render(); renderSettings();
+        showMsg('导入成功', 'ok');
+      } else if (!res.canceled) {
+        showMsg((res.errors || []).join('；'), 'err');
+      }
+    });
+
+    settingsBtn.addEventListener('click', openSettings);
+    settingsClose.addEventListener('click', closeSettings);
+
+    // ============ 初始化 ============
+    (async function init() {
+      state.data = await window.appAPI.loadData();
+      renderTopbar();
+      applyTheme();
+      renderThemeDots();
+      render();
+      setInterval(render, 1000);
+    })();
+  </script>
+</body>
+</html>
